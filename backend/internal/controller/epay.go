@@ -254,12 +254,11 @@ func verifyEpaySign(values url.Values, secretKey string) bool {
 	}
 	sort.Strings(keys)
 
-	parts := make([]string, 0, len(keys)+1)
+	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
 		parts = append(parts, key+"="+values.Get(key))
 	}
-	parts = append(parts, "key="+secretKey)
-	payload := strings.Join(parts, "&")
+	payload := strings.Join(parts, "&") + secretKey
 	sum := md5.Sum([]byte(payload))
 	return strings.EqualFold(hex.EncodeToString(sum[:]), values.Get("sign"))
 }
