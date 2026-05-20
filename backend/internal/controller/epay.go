@@ -128,6 +128,12 @@ func (e *EpayController) handlePayInternal(c *gin.Context, isHTML bool) {
 		if channelType == string(model.ChannelTypeWechat) {
 			title = "微信"
 		}
+		queryValues := url.Values{}
+		queryValues.Set("act", "query")
+		queryValues.Set("out_trade_no", req.OutTradeNo)
+		queryValues.Set("pid", req.Pid)
+		querySign := generateEpaySign(queryValues, secretKey)
+
 		html := fmt.Sprintf(`
 		<!DOCTYPE html>
 		<html>
@@ -147,16 +153,29 @@ func (e *EpayController) handlePayInternal(c *gin.Context, isHTML bool) {
 		</head>
 		<body>
 			<div class="card">
-				<h2>%s扫码支付</h2>
+				<h2 id="title">%s扫码支付</h2>
 				<div class="money"><span>￥</span>%s</div>
-				<div class="qr-wrapper">
+				<div class="qr-wrapper" id="qr-wrapper">
 					<img src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=%s&margin=1" alt="QR Code" width="220" height="220">
 				</div>
-				<div class="tip">请打开%s扫一扫，扫描二维码完成支付</div>
+				<div class="tip" id="tip">请打开%s扫一扫，扫描二维码完成支付</div>
 				<div class="tip" style="margin-top:30px; font-size:12px; color:#aaa;">订单号: %s</div>
 			</div>
+			<script>
+				setInterval(function() {
+					fetch('/api.php?act=query&out_trade_no=%s&pid=%s&sign=%s')
+					.then(res => res.json())
+					.then(data => {
+						if (data.code === 1) {
+							document.getElementById('title').innerText = '支付成功';
+							document.getElementById('qr-wrapper').innerHTML = '<div style="color: #67c23a; font-size: 60px;">✅</div>';
+							document.getElementById('tip').innerText = '支付已完成，请返回原网站';
+						}
+					}).catch(e => console.error(e));
+				}, 3000);
+			</script>
 		</body>
-		</html>`, title, req.Money, url.QueryEscape(payURL), title, res.TradeNo)
+		</html>`, title, req.Money, url.QueryEscape(payURL), title, res.TradeNo, req.OutTradeNo, req.Pid, querySign)
 		c.String(http.StatusOK, html)
 	} else {
 		c.JSON(http.StatusOK, gin.H{
@@ -283,6 +302,26 @@ func moneyToFen(money string) (int64, error) {
 		return 0, fmt.Errorf("invalid money")
 	}
 	return whole*100 + decimal, nil
+}
+
+// generateEpaySign 按照易支付规则生成MD5签名
+func generateEpaySign(values url.Values, secretKey string) string {
+	keys := make([]string, 0, len(values))
+	for key, list := range values {
+		if key == "sign" || key == "sign_type" || key == "act" || len(list) == 0 || list[0] == "" {
+			continue
+		}
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, key+"="+values.Get(key))
+	}
+	payload := strings.Join(parts, "&") + secretKey
+	sum := md5.Sum([]byte(payload))
+	return hex.EncodeToString(sum[:])
 }
 
 // verifyEpaySign 按易支付常见规则校验 MD5 签名。
