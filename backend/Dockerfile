@@ -7,7 +7,7 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 COPY frontend/ .
-RUN npm run build:prod
+RUN npm run build
 
 # 阶段 2：编译后端
 FROM golang:1.24-alpine AS backend-builder

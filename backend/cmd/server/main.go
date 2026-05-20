@@ -98,9 +98,6 @@ func main() {
 }
 
 func registerRoutes(engine *gin.Engine, cfg *config.Config, db *gorm.DB, rdb *redis.Client, paySvc *service.PayService, logger *zap.Logger) {
-        // Serve frontend static files
-        engine.Static("/", "./frontend/dist")
-
 	engine.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now().Unix()})
 	})
@@ -140,6 +137,20 @@ adminProtected.PUT("/channels/:id", adminCtrl.UpdateChannel)
 		adminProtected.DELETE("/channels/:id", adminCtrl.DeleteChannel)
                 adminProtected.GET("/orders", adminCtrl.ListOrders)
 	}
+        
+        // Serve frontend static files (must be after API routes to avoid conflicts)
+        // Serve frontend static files via NoRoute handler
+        engine.NoRoute(func(c *gin.Context) {
+                // Try to serve file from frontend/dist directory
+                filePath := "./frontend/dist" + c.Request.URL.Path
+                if _, err := os.Stat(filePath); err == nil {
+                        // File exists, serve it
+                        c.File(filePath)
+                } else {
+                        // File not found, serve index.html for SPA routing
+                        c.File("./frontend/dist/index.html")
+                }
+        })
 }
 
 func connectDB(cfg *config.Config, logger *zap.Logger) (*gorm.DB, error) {
