@@ -15,28 +15,30 @@ import (
 	"paygate-omni/internal/repository"
 )
 
-// PayService 封装支付核心业务
+// PayService 封装支付核心业务。
 type PayService struct {
 	store  *repository.Store
 	logger *zap.Logger
 }
 
-// NewPayService 创建 PayService 实例
+// NewPayService 创建 PayService 实例。
 func NewPayService(store *repository.Store, logger *zap.Logger) *PayService {
 	return &PayService{store: store, logger: logger}
 }
 
-// 统一订单响应结构
+// UnifiedOrderResult 表示统一下单结果。
 type UnifiedOrderResult struct {
 	TradeNo   string
 	PayParams interface{}
 }
 
-// CreateOrder 处理统一下单
+// CreateOrder 处理统一下单。
 func (s *PayService) CreateOrder(ctx context.Context, merchantAppID, merchantTradeNo, subject, channelType, notifyURL string, amount int64) (*UnifiedOrderResult, error) {
 	// 1. 检查订单号是否已存在
 	var count int64
-	s.store.DB.Model(&model.Order{}).Where("merchant_app_id = ? AND out_trade_no = ?", merchantAppID, merchantTradeNo).Count(&count)
+	if err := s.store.DB.Model(&model.Order{}).Where("merchant_app_id = ? AND out_trade_no = ?", merchantAppID, merchantTradeNo).Count(&count).Error; err != nil {
+		return nil, fmt.Errorf("check duplicate order failed: %w", err)
+	}
 	if count > 0 {
 		return nil, errors.New("merchant_trade_no already exists")
 	}
@@ -62,9 +64,9 @@ func (s *PayService) CreateOrder(ctx context.Context, merchantAppID, merchantTra
 		ChannelType:   payChannel.ChannelType,
 		Amount:        amount,
 		Subject:       subject,
-		Status:        "PENDING",
+		Status:        model.OrderStatusPending,
 		NotifyURL:     notifyURL,
-		Extra:         "{}", // 默认空JSON
+		Extra:         "{}",
 	}
 	if err := s.store.DB.Create(&order).Error; err != nil {
 		return nil, fmt.Errorf("failed to create order: %w", err)
@@ -75,28 +77,30 @@ func (s *PayService) CreateOrder(ctx context.Context, merchantAppID, merchantTra
 	case string(model.ChannelTypeWechat):
 		return s.createWechatOrder(ctx, &order, &payChannel)
 	case string(model.ChannelTypeAlipay):
-		// TODO: Alipay integration
 		return s.createAlipayOrder(ctx, &order, &payChannel)
 	default:
 		return nil, fmt.Errorf("unsupported channel type: %s", channelType)
 	}
 }
 
-// createWechatOrder 微信 V3 下单 (此处示例 Native 支付)
+// createWechatOrder 微信 V3 下单（此处示例 Native 支付）。
 func (s *PayService) createWechatOrder(ctx context.Context, order *model.Order, channel *model.PayChannel) (*UnifiedOrderResult, error) {
-	// 初始化 ClientV3 (从 channel 直接读取已解密的 PrivateKey / APIv3Key)
+	// 初始化 ClientV3（从 channel 直接读取已解密的 PrivateKey / APIv3Key）
 	client, err := wechat.NewClientV3(channel.MchID, channel.SerialNo, channel.APIv3Key, channel.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init wechat client: %w", err)
 	}
-	// TODO: 商户平台配置系统域名
-	notifyUrl := "https://paygate.example.com/api/v1/pay/notify/wechat"
+
+	notifyUrl := order.NotifyURL
+	if notifyUrl == "" {
+		notifyUrl = "https://paygate.example.com/api/v1/pay/notify/wechat"
+	}
 
 	bm := make(gopay.BodyMap)
 	bm.Set("appid", channel.AppID).
 		Set("mchid", channel.MchID).
 		Set("description", order.Subject).
-		Set("out_trade_no", order.TradeNo). // 给微信的单号是我们系统的内部单号
+		Set("out_trade_no", order.TradeNo).
 		Set("notify_url", notifyUrl)
 	bm.SetBodyMap("amount", func(b gopay.BodyMap) {
 		b.Set("total", order.Amount).Set("currency", "CNY")

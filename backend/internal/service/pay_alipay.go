@@ -16,8 +16,10 @@ func (s *PayService) createAlipayOrder(ctx context.Context, order *model.Order, 
 		return nil, fmt.Errorf("failed to init alipay client: %w", err)
 	}
 
-	// TODO: 生产/环境需配置真实的 Notify 地址
-	notifyUrl := "https://paygate.example.com/api/v1/pay/notify/alipay"
+	notifyUrl := order.NotifyURL
+	if notifyUrl == "" {
+		notifyUrl = "https://paygate.example.com/api/v1/pay/notify/alipay"
+	}
 
 	bm := make(gopay.BodyMap)
 	bm.Set("subject", order.Subject).

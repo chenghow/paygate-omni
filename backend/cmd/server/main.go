@@ -111,7 +111,11 @@ func registerRoutes(engine *gin.Engine, cfg *config.Config, db *gorm.DB, rdb *re
 	})
 
 	payCtrl := controller.NewPayController(logger, paySvc)
+	epayCtrl := controller.NewEpayController(logger, db, paySvc)
 	adminCtrl := controller.NewAdminController(logger, cfg, db, rdb)
+
+	engine.Any("/submit.php", epayCtrl.Submit)
+	engine.Any("/api.php", epayCtrl.API)
 
 	v1 := engine.Group("/api/v1")
 	{

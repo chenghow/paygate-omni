@@ -98,6 +98,39 @@ docker compose ps
 }
 ```
 
+## 易支付兼容接入
+
+如果外部网站或插件按易支付风格对接，可以直接使用以下入口：
+
+- 下单地址：`http://localhost:8080/submit.php`
+- 统一接口：`http://localhost:8080/api.php`
+
+常用参数：
+
+- `pid`：商户后台创建的 `AppID`
+- `key`：商户后台配置的 `SecretKey`
+- `type`：`alipay` 或 `wechat` / `wxpay`
+- `out_trade_no`：外部网站订单号
+- `notify_url`：外部网站回调地址
+- `return_url`：支付完成后的跳转地址，可选
+- `name`：商品名
+- `money`：金额，单位元
+
+签名规则：
+
+- `sign_type=MD5`
+- 参与签名的参数按字段名排序，拼接为 `k=v`，最后追加 `key=商户密钥`
+- 计算结果与 `sign` 比对
+
+查询订单时可调用：
+
+- `http://localhost:8080/api.php?act=query`
+
+说明：
+
+- 这个兼容层保留了项目内部的 `/api/v1` 接口，不影响现有管理后台和自研接入方式。
+- 如果你的上游系统已经按易支付插件开发，优先使用 `submit.php` 和 `api.php`。
+
 ## 生产环境部署说明
 
 本项目不内置反向代理和 HTTPS，生产环境需自行配置：
