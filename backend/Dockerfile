@@ -1,5 +1,16 @@
-# 阶段 1：编译
-FROM golang:1.24-alpine AS builder
+# 阶段 1：编译前端
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ .
+RUN npm run build:prod
+
+# 阶段 2：编译后端
+FROM golang:1.24-alpine AS backend-builder
 
 WORKDIR /build
 
@@ -13,16 +24,16 @@ ENV GOFLAGS=-mod=mod
 
 # 先只复制依赖声明文件，利用 Docker 层缓存：
 # 只要 go.mod 未变，下载步骤不会重新执行
-COPY go.mod ./
+COPY backend/go.mod ./
 RUN go mod download
 
 # 复制全部源码后执行 tidy（补全 go.sum）并编译
-COPY . .
+COPY backend/ .
 RUN go mod tidy && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-s -w" -o paygate-server ./cmd/server
 
-# 阶段 2：最小运行镜像
+# 阶段 3：最小运行镜像
 FROM alpine:3.19
 
 WORKDIR /app
@@ -31,7 +42,8 @@ RUN apk add --no-cache ca-certificates tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone
 
-COPY --from=builder /build/paygate-server .
+COPY --from=backend-builder /build/paygate-server .
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 RUN adduser -D -g '' paygate
 USER paygate

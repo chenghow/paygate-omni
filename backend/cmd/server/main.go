@@ -98,6 +98,9 @@ func main() {
 }
 
 func registerRoutes(engine *gin.Engine, cfg *config.Config, db *gorm.DB, rdb *redis.Client, paySvc *service.PayService, logger *zap.Logger) {
+        // Serve frontend static files
+        engine.Static("/", "./frontend/dist")
+
 	engine.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now().Unix()})
 	})

@@ -1,26 +1,31 @@
 # PayGate-Omni 聚合支付网关
 
-PayGate-Omni 是一个轻量、高性能、金融级安全的个人聚合支付网关。系统向下对接商户应用（统一 API），向上聚合支付宝与微信支付。
+PayGate-Omni 是一个轻量、高性能、金融级安全的个人聚合支付网关。系统向下对接商户
+应用（统一 API），向上聚合支付宝与微信支付。
 
 ## 核心特性
 
 - 多渠道聚合：支持支付宝、微信支付。
 - 安全优先：敏感配置采用 AES-256-GCM 落盘加密。
 - 防重放与幂等：基于 Redis Nonce 与分布式锁保障回调安全。
-- 容器化部署：Docker Compose 一键启动后端、前端、PostgreSQL、Redis。
+- 前后端整合：前端和后端集成为单一服务，简化部署。
+- 容器化部署：Docker Compose 一键启动，包含 PostgreSQL 和 Redis。
 
-## 架构说明（已移除 Nginx）
+## 架构说明
 
-当前仓库默认不包含 Nginx 服务，采用前后端直连：
+当前架构为前后端整合设计，采用单一服务模式：
 
-- 前端管理后台：`http://localhost:3000`
-- 后端 API：`http://localhost:8080`
-- PostgreSQL：容器内网络访问
-- Redis：容器内网络访问
+- **统一入口**：`http://localhost:8080`
+  - 前端管理后台由后端直接提供（`/` 路径）
+  - API 接口统一在 `/api/v1` 路径下
+- **数据库**：PostgreSQL（容器内网络访问）
+- **缓存**：Redis（容器内网络访问）
 
-说明：
-- `docker-compose.yml` 中不再包含 `nginx` 服务。
-- 反向代理与 HTTPS 证书由使用者在自己的部署环境中自行配置（如 Nginx/Caddy/Traefik/云负载均衡）。
+优势：
+- 不需要前后端分别部署
+- 避免跨域问题
+- 单一反向代理配置
+- 简化容器编排
 
 ## 快速启动
 
@@ -55,22 +60,23 @@ docker compose up -d --build
 docker compose ps
 ```
 
-访问地址：
+### 5. 访问系统
 
-- 后台：`http://localhost:3000`
-- 健康检查：`http://localhost:8080/health`
+- **管理后台**：`http://localhost:8080`
+- **健康检查**：`http://localhost:8080/health`
+- **API**：`http://localhost:8080/api/v1/*`
 
 ## 管理后台使用
 
-1. 打开 `http://localhost:3000`
-2. 使用 `.env` 中的 `ADMIN_PASSWORD` 登录
+1. 打开浏览器，访问 `http://localhost:8080`
+2. 使用 `.env` 中配置的 `ADMIN_PASSWORD` 登录
 3. 在商户管理中新增商户
 4. 在渠道配置中绑定微信/支付宝参数
 5. 在订单管理和总览页面查看数据
 
 ## API 接入示例
 
-支付下单接口：`POST /api/v1/pay/order`
+支付下单接口：`POST /api/v1/pay/create`
 
 请求头必须包含：
 
@@ -92,36 +98,106 @@ docker compose ps
 }
 ```
 
-## 生产环境部署说明（反向代理与 HTTPS 由你自行配置）
+## 生产环境部署说明
 
-本项目不内置 HTTPS 与网关服务，生产环境请自行配置：
+本项目不内置反向代理和 HTTPS，生产环境需自行配置：
 
-1. 反向代理：将外部 `443` 请求转发到前端 `3000` 与后端 `8080`。
-2. TLS 证书：使用 Let's Encrypt 或云厂商证书，强制启用 HTTPS。
-3. 安全头：建议添加 HSTS、X-Forwarded-Proto、X-Real-IP 等头。
-4. 访问控制：建议限制后台登录入口 IP 段，开启 WAF/限流。
+### 1. 反向代理配置
 
-参考路由策略：
+推荐使用 Nginx、Caddy 或云厂商负载均衡，转发到后端 8080 端口：
 
-- `/` -> `frontend:3000`
-- `/api/` -> `backend:8080`
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+    
+    location / {
+        proxy_pass http://backend:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
 
-## 项目目录
+### 2. HTTPS 配置
+
+使用 Let's Encrypt 或云厂商证书：
+
+```bash
+# Certbot 示例
+certbot certonly --webroot -w /var/www/yourdomain -d yourdomain.com
+```
+
+### 3. 安全建议
+
+- 启用 HTTPS，设置 HSTS 头
+- 限制管理后台访问 IP 段
+- 启用 WAF、限流、DDoS 防护
+- 定期备份 `.env` 和数据库数据
+
+## 项目结构
 
 ```text
 paygate-omni/
-├── backend/
-├── frontend/
-├── docker/
+├── backend/              # Go 后端源码
+│   ├── cmd/server/       # 程序入口
+│   ├── config/           # 配置解析
+│   ├── internal/         # 核心业务逻辑
+│   │   ├── model/        # 数据模型
+│   │   ├── service/      # 业务服务
+│   │   ├── controller/   # HTTP 控制器
+│   │   ├── repository/   # 数据持久化
+│   │   └── middleware/   # 中间件
+│   ├── pkg/              # 公共库（加密等）
+│   ├── Dockerfile        # 三阶段构建：前端编译 + 后端编译 + 运行镜像
+│   ├── go.mod
+│   └── go.sum
+├── frontend/             # Vue 3 前端源码
+│   ├── src/
+│   │   ├── api/          # API 调用
+│   │   ├── views/        # 页面
+│   │   ├── components/   # 组件
+│   │   └── router/       # 路由
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── Dockerfile        # 构建前端（已集成到后端 Dockerfile）
+├── docker/               # 辅助文件
 │   └── postgres/
-├── .env.example
-├── docker-compose.yml
+│       └── init.sql      # 数据库初始化
+├── docker-compose.yml    # 容器编排：postgres, redis, backend
+├── .env.example          # 环境变量模板
+├── .gitignore
 └── README.md
 ```
 
+## 数据库初始化
+
+PostgreSQL 自动执行 `docker/postgres/init.sql` 初始化脚本。如需手动执行：
+
+```bash
+docker exec paygate_postgres psql -U paygate -d paygate_omni -f /docker-entrypoint-initdb.d/init.sql
+```
+
+## 常见问题
+
+**Q: 如何更改管理员密码？**
+A: 修改 `.env` 中的 `ADMIN_PASSWORD`，重启后端服务 `docker compose restart backend`。
+
+**Q: 前端无法加载？**
+A: 确保后端服务正常运行：`docker logs paygate_backend`。检查 `frontend/dist` 目录是否存在。
+
+**Q: 无法连接数据库？**
+A: 确保 `MASTER_KEY` 配置正确，长度必须为 32 字节。检查 `.env` 中的数据库配置。
+
 ## 安全注意事项
 
-- 不要将 `.env`、数据库数据、私钥证书提交到 Git。
-- `MASTER_KEY` 丢失会导致历史加密数据无法解密。
-- 生产环境务必启用 HTTPS，避免明文传输管理密码与支付数据。
+- 不要将 `.env` 文件、数据库文件、私钥提交到 Git
+- `MASTER_KEY` 丢失会导致所有历史加密数据无法解密，请妥善保管
+- 生产环境务必启用 HTTPS，避免明文传输管理密码和支付数据
+- 定期更新 Docker 镜像和依赖版本
 
+## License
+
+MIT
