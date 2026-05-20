@@ -10,8 +10,6 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-paygate_secret_change_me}
       POSTGRES_DB: ${DB_NAME:-paygate_omni}
       TZ: Asia/Shanghai
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -27,8 +25,6 @@ services:
     container_name: paygate_redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    ports:
-      - "6380:6379"
     volumes:
       - redis_data:/data
     healthcheck:
