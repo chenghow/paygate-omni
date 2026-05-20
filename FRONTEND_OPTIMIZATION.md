@@ -169,17 +169,14 @@ npm run preview     # 本地预览生产版本
 **文件**：`docker-compose.yml`
 
 **现有配置**：
-- `frontend-dev`：开发环境（Vite Dev Server，支持热更新）
+
 - `frontend`：生产环境（预编译静态文件）
 - `nginx`：反向代理（唯一的外部入口）
 
 **运行方式**：
 ```bash
-# 开发模式（保留 Vite 热更新）
-docker compose --profile dev up -d --build
-
-# 生产模式（使用预编译文件）
-docker compose --profile prod up -d --build
+# 启动所有服务（使用预编译静态文件）
+docker compose up -d --build
 
 # 仅启动后端（前端本地开发）
 docker compose up -d --build backend postgres redis
@@ -269,14 +266,6 @@ cd frontend
 cp .env.example .env.development.local
 npm install
 npm run dev  # 访问 http://localhost:3000
-```
-
-### Docker 开发
-```bash
-# 保留 Vite 热更新
-docker compose --profile dev up -d --build
-
-# 访问 http://localhost
 ```
 
 ### Docker 生产
