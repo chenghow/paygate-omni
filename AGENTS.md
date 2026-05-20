@@ -129,3 +129,49 @@ AI Agent 在编写业务逻辑时，涉及以下四点必须无条件满足：
 根据文档 4.3 规范，必须实现双重幂等机制：
 1. **Redis 悲观锁**：以 `pay_lock:wechat:{out_trade_no}` 为 key，执行 `SetNX`（10秒过期），防止渠道的高并发重复投递。
 2. **DB 状态机校验**：开启 DB 事务，查询 Order 状态是否为 `PENDING`。如果已是 `SUCCESS` 或 `FAILED`，则直接释放锁并向渠道回写 `SUCCESS` 应答。
+
+---
+
+## 7. 前端开发规范 (Frontend Standards)
+
+### 7.1 文件结构与命名
+* 遵循 Vue 3 Single-File Component (SFC) 标准，使用 `.vue` 后缀。
+* 组件名使用 PascalCase（如 `MerchantForm.vue`），文件名保持一致。
+* 页面文件放在 `src/views/`，通用组件放在 `src/components/`，布局文件放在 `src/layout/`。
+
+### 7.2 API 调用规范
+* **强制使用** `src/api/service.ts` 中的 `apiService` 类，禁止直接使用 `fetch` 或 `axios`。
+* `apiService` 提供了统一的请求拦截、token 管理、错误捕获、超时控制等机制。
+* 所有 API 请求自动在 Header 中注入 `Authorization: Bearer {token}`。
+
+### 7.3 环境变量管理
+* 前端环境变量通过 `import.meta.env.VITE_*` 访问。
+* 必须在 `.env.example` 中列出所有可用的环境变量，便于新开发者快速上手。
+* 生产环境通过 `.env.production` 文件覆盖开发配置（如 API 地址改为相对路径 `/api`）。
+* 敏感数据（如后端密码）不应该在前端环境变量中定义，密码由后端环境变量 `ADMIN_PASSWORD` 控制。
+
+### 7.4 路由与认证
+* 使用 `vue-router` 的 `beforeEach` 导航守卫检查登录状态。
+* 页面通过 `meta.requiresAuth` 标记是否需要登录，守卫自动拦截未认证的访问。
+* token 存储在 `localStorage` 的 `admin_token` 键中，logout 时清空该值。
+
+### 7.5 UI 组件库规范
+* **强制使用** `Element Plus` 作为 UI 库（已在 `main.ts` 全局注册）。
+* 按需引入组件，避免将整个库打包进去。
+* 遵循 Element Plus 的命名约定和样式规范。
+
+### 7.6 TypeScript 类型定义
+* 所有函数参数和返回值必须有明确的类型声明。
+* API 响应数据必须定义接口类型（如 `interface MerchantResponse { ... }`）。
+* 避免使用 `any` 类型，必要时使用 `unknown` 并通过类型守卫转换。
+
+### 7.7 构建与部署
+* **开发环境**：运行 `npm run dev` 启动 Vite Dev Server，支持热更新。
+* **生产构建**：运行 `npm run build:prod` 生成优化的产出，自动分包和树摇动。
+* **Docker 生产构建**：使用多阶段 Dockerfile，第一阶段编译，第二阶段运行（使用 serve 提供静态文件）。
+* **性能优化**：启用 gzip 压缩（Nginx 层）、代码分割、懒加载路由等。
+
+### 7.8 安全与防护
+* **XSS 防护**：Vue 3 默认对模板插值进行 HTML 转义，避免使用 `v-html`。
+* **CSRF 防护**：后端对敏感操作（POST/PUT/DELETE）做 token 校验，前端自动在 Header 中注入。
+* **密码安全**：登录密码通过 HTTPS 加密传输（生产环境部署 SSL 证书），前端不存储或处理明文密码。
