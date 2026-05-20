@@ -1,0 +1,35 @@
+.env
+*.env.local
+backend/bin/
+backend/*.test
+backend/vendor/
+docker/postgres/data/
+.vscode/settings.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+docker/nginx/certs/*.key
+docker/nginx/certs/*.pem
+*.out
+coverage.html
+notes.md
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.npm
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/.env.local
+frontend/.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Docker
+docker/redis/data/
+docker-compose.override.yml
